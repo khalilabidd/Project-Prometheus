@@ -35,11 +35,13 @@ def production_plan():
         # ordering powerplants per cost
         powerplants = sorted(powerplants, key=lambda p: p['cost/MWh'])
         
-        # trying different scenarios using different combinations of powerplants switched on. it can be optimised to exclude some of them.
+        # trying different scenarios using different combinations of powerplants switched on.
         scenarios = generate_scenarios(len(powerplants))
         min_cost = -1
         for s in scenarios:
             scenario_powerplants = [p for i, p in enumerate(powerplants) if i in s]
+            if load>sum([p['pmax'] for p in scenario_powerplants]):
+                continue
             total_cost = 0
             load_scenario = load - sum([p['pmin'] for p in scenario_powerplants])
             scenario_production_plan = []
