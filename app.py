@@ -1,8 +1,16 @@
 from flask import Flask, request, jsonify
 import logging
+from itertools import combinations
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
+
+def generate_scenarios(n):
+    result = []
+    for length in range(1, n):
+        for combo in combinations(range(n), length):
+            result.append(list(combo))
+    return result
 
 @app.route('/productionplan', methods=['POST'])
 def production_plan():
@@ -12,9 +20,6 @@ def production_plan():
         fuels = data['fuels']
         powerplants = data['powerplants']
 
-        # Initialize the production plan
-        production_plan = []
-        
         for plant in powerplants:
             if plant['type'] == 'gasfired':
                 plant['cost/MWh'] = fuels['gas(euro/MWh)'] / plant['efficiency'] + 0.3*fuels["co2(euro/ton)"]
@@ -24,27 +29,28 @@ def production_plan():
                 plant['cost/MWh'] = 0
                 plant['pmin'] *= fuels['wind(%)'] / 100
                 plant['pmax'] *= fuels['wind(%)'] / 100
-            load -= round(plant['pmin'],1)
+            plant['pmin'] = round(plant['pmin'],1)
+            plant['pmax'] = round(plant['pmax'],1)
 
-        if load<0:
-            return jsonify({"error": "the powerplants minimum capacities is bigger than the load"}), 400
+        
+        powerplants = sorted(powerplants, key=lambda p: p['cost/MWh'])
+        scenarios = generate_scenarios(len(powerplants))
+        min_cost = -1
+        for s in scenarios:
+            scenario_powerplants = [p for i, p in enumerate(powerplants) if i in s]
+            total_cost = 0
+            load_scenario = load - sum([p['pmin'] for p in scenario_powerplants])
+            scenario_production_plan = []
+            for plant in scenario_powerplants:
+                power = max(plant['pmin'], min(plant['pmax'], load_scenario + plant['pmin']))
+                load_scenario -= power - plant['pmin']
+                total_cost += plant['cost/MWh'] * power
+                scenario_production_plan.append({'name': plant['name'], 'p': power})
+            if load_scenario==0 and (total_cost < min_cost or min_cost==-1):
+                min_cost = total_cost
+                production_plan = scenario_production_plan + [{'name': plant['name'], 'p': 0} for i, plant in enumerate(powerplants) if i not in s]
 
-        plants = sorted(powerplants, key=lambda p: p['cost/MWh'])
-        for plant in plants:
-            if load > 0:
-                production_plan.append({
-                    'name': plant['name'],
-                    'p': round(min(plant['pmax'], load + plant['pmin']),1)
-                })
-                load -= round(plant['pmax'] - plant['pmin'],1)
-            else:
-                production_plan.append({
-                'name': plant['name'],
-                'p': round(plant['pmin'],1)
-            })
-
-        # Ensure that the load is met
-        if load > 0:
+        if min_cost==-1:
             return jsonify({"error": "Unable to meet the load with the given powerplants"}), 400
 
         return jsonify(production_plan)
