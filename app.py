@@ -31,9 +31,11 @@ def production_plan():
                 plant['pmax'] *= fuels['wind(%)'] / 100
             plant['pmin'] = round(plant['pmin'],1)
             plant['pmax'] = round(plant['pmax'],1)
-
-        
+            
+        # ordering powerplants per cost
         powerplants = sorted(powerplants, key=lambda p: p['cost/MWh'])
+        
+        # trying different scenarios using different combinations of powerplants switched on. it can be optimised to exclude some of them.
         scenarios = generate_scenarios(len(powerplants))
         min_cost = -1
         for s in scenarios:
@@ -46,6 +48,7 @@ def production_plan():
                 load_scenario -= power - plant['pmin']
                 total_cost += plant['cost/MWh'] * power
                 scenario_production_plan.append({'name': plant['name'], 'p': power})
+            # selecting best production_plan
             if load_scenario==0 and (total_cost < min_cost or min_cost==-1):
                 min_cost = total_cost
                 production_plan = scenario_production_plan + [{'name': plant['name'], 'p': 0} for i, plant in enumerate(powerplants) if i not in s]
