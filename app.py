@@ -40,10 +40,12 @@ def production_plan():
         min_cost = -1
         for s in scenarios:
             scenario_powerplants = [p for i, p in enumerate(powerplants) if i in s]
-            if load>sum([p['pmax'] for p in scenario_powerplants]):
+            if load > sum([p['pmax'] for p in scenario_powerplants]):
+                continue
+            load_scenario = load - sum([p['pmin'] for p in scenario_powerplants])
+            if load_scenario < 0:
                 continue
             total_cost = 0
-            load_scenario = load - sum([p['pmin'] for p in scenario_powerplants])
             scenario_production_plan = []
             for plant in scenario_powerplants:
                 power = max(plant['pmin'], min(plant['pmax'], load_scenario + plant['pmin']))
